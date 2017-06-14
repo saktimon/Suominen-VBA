@@ -1,2 +1,2 @@
-# Suominen-VBA
-Suominen VBA script for Defect management
+# VBA
+VBA script for Defect management
