@@ -8,20 +8,24 @@ Attribute VB_Name = "Module1"
 Sub CopyDefects()
 
 Dim LastRow As Integer, i As Integer, erow As Long
-Dim DefectLog As String, DefectLogName As String
+Dim DefectLogURL As String, DefectLogName As String
 Dim DefectLogWasOpened As Boolean
+Dim DefectLog As Workbook
+Dim TestScript As Workbook
 DefectLogWasOpened = False
 
+Set TestScript = ThisWorkbook
+
 ' Remember to update the Defect log path here on all scripts!
-DefectLog = "https://testifyoy.sharepoint.com/Shared%20Documents/DEFECT%20log.xlsx"
+DefectLogURL = "https://testifyoy.sharepoint.com/Shared%20Documents/DEFECT%20log.xlsx"
 DefectLogName = "DEFECT log.xlsx"
 
-'Debug.Print ("Defect log URL: " & DefectLog)
+'Debug.Print ("Defect log URL: " & DefectLogURL)
 
 ' This public function found by googling parses URL to appropriate format
-DefectLog = Parse_Resource(DefectLog)
+DefectLogURL = Parse_Resource(DefectLogURL)
 
-'Debug.Print ("Defect log parsed:" & DefectLog)
+'Debug.Print ("Defect log parsed:" & DefectLogURL)
 
 ' Finds how many rows in script has values, i.e. how many rows to check for defects
 LastRow = Cells.Find(What:="*", _
@@ -40,33 +44,41 @@ For i = 2 To LastRow
 'If row has a defect and doesn't have Defect ID yet, it is selected for copying
 If (Cells(i, 8) = "Defect" And Cells(i, 17) = "") Then
 Debug.Print ("Defect row: " & i)
-Range(Cells(i, 1), Cells(i, 16)).Select
-Selection.Copy
+
+' Old Copying
+'Range(Cells(i, 1), Cells(i, 16)).Select
+'Selection.Copy
 
 ' Defect log file is opened if not already so
 If Not IsWorkBookOpen(DefectLogName) Then
-    Workbooks.Open Filename:=DefectLog, ReadOnly:=False, Notify:=False
+    Workbooks.Open Filename:=DefectLogURL, ReadOnly:=False, Notify:=False
     ActiveWorkbook.LockServerFile
-'    SetAttr DefectLog, vbNormal
+    Set DefectLog = ActiveWorkbook
+'    SetAttr DefectLogURL, vbNormal
     DefectLogWasOpened = True
     Debug.Print ("Defect log was opened")
+Else
+    Set DefectLog = Workbooks(DefectLogName)
+    Debug.Print ("Defect log was already open")
 End If
 
-Workbooks(DefectLogName).Activate
-Worksheets("Defect log").Select
-erow = FirstBlankRow(ActiveSheet.Range("B26:K426"))
+'Find the 1st empty row from Defect log (ID in Column A is disregarded
+erow = FirstBlankRow(DefectLog.Worksheets("Defect log").Range("B26:K426"))
 
-ActiveSheet.Cells(erow, 3).Select
-ActiveSheet.Paste
-ActiveSheet.Cells(erow, 2) = ThisWorkbook.Name
+'Copy defect row to Defect log
+'ThisWorkbook.Activate
+TestScript.Sheets(2).Range(Cells(i, 1), Cells(i, 16)).Copy
+DefectLog.Worksheets("Defect log").Cells(erow, 3).PasteSpecial xlPasteValues
 
-ActiveWorkbook.Save
-ActiveSheet.Cells(erow, 1).Select
-Selection.Copy
-ThisWorkbook.Activate
-ActiveSheet.Cells(i, 17).Select
-ActiveSheet.Paste
-ActiveWorkbook.Save
+'Copy test script name to Defect log
+DefectLog.Worksheets("Defect log").Cells(erow, 2) = ThisWorkbook.Name
+
+DefectLog.Save
+
+'Copy-paste defect ID to test script
+DefectLog.Worksheets("Defect log").Cells(erow, 1).Copy ThisWorkbook.ActiveSheet.Cells(i, 17)
+
+TestScript.Save
 Debug.Print ("Defect copied successfully: " & Cells(i, 17))
 
 End If
@@ -107,4 +119,6 @@ Function IsWorkBookOpen(Name As String) As Boolean
     Set xWb = Application.Workbooks.Item(Name)
     IsWorkBookOpen = (Not xWb Is Nothing)
 End Function
+
+
 
