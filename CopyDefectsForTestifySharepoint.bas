@@ -22,11 +22,14 @@ Set TestScript = ThisWorkbook
 'Debug.Print (ThisWorkbook.ContentTypeProperties(i).Value)
 'Next i
 
+'Old way to set defect log URL 
+'DefectLogURL = "https://testifyoy.sharepoint.com/Shared%20Documents/DEFECT%20log.xlsx"
+
 'DefectLogURL is fetched from Sharepoint attribute DefectLog
 DefectLogURL = ThisWorkbook.ContentTypeProperties.Item("DefectLog").Value
 Debug.Print ("Defect log URL: " & DefectLogURL)
 
-'DefectLogURL = "https://testifyoy.sharepoint.com/Shared%20Documents/DEFECT%20log.xlsx"
+
 DefectLogName = DigFilename(DefectLogURL)
 Debug.Print ("Filename after splitting: " & DefectLogName)
 
@@ -55,9 +58,6 @@ For i = 2 To LastRow
 If (Cells(i, 8) = "Defect" And Cells(i, 17) = "") Then
 Debug.Print ("Defect row: " & i)
 
-' Old Copying
-'Range(Cells(i, 1), Cells(i, 16)).Select
-'Selection.Copy
 
 ' Defect log file is opened if not already so
 If Not IsWorkBookOpen(DefectLogName) Then
@@ -200,7 +200,6 @@ Function Parse_Resource(URL As String)
  
  Function DigFilename(URL As String)
 
- 'Uncomment the below line to test locally without calling the function & remove argument above
  Dim SplitURL() As String
 
  'Split the URL into an array
