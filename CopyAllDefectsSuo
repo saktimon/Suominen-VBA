@@ -1,0 +1,219 @@
+' Created by Sakari Timonen - Testify Oy 2017-06 for free usage of Suominen Oy
+' This is a macro for copying all defects from Test scripts in a Sharepoint folder to this Defect log automatically and works only with predefined templates
+' If Step status (Column-H) = Defect && Defect ID doesn't exists yet (Column-Q)
+' Copies found defect rows to 1st empty rows on this defect log
+' And then copies the ID from Defect log to Test script
+
+Sub CopyAllDefects()
+
+Dim LastRow As Integer, i As Integer, j As Integer, erow As Long
+Dim DefectLogWB As Workbook
+Dim TestScriptWB As Workbook
+Dim TestScriptWasOpened As Boolean
+Dim f As File
+Dim SharepointFolder As Folder
+Dim fs As New FileSystemObject
+
+Set DefectLogWB = ThisWorkbook
+'Debug.Print (Parse_Resource("https://sharepointURL"))
+Set SharepointFolder = fs.GetFolder(Parse_Resource("https://sharepointURL"))
+
+Application.ScreenUpdating = False
+
+
+'Old stuff in case attributes want to be used
+'DefectLogURL is fetched from Sharepoint attribute DefectLog
+'DefectLogURL = ThisWorkbook.ContentTypeProperties.Item("DefectLog").Value
+'Debug.Print ("Defect log URL: " & DefectLogURL)
+
+
+
+
+For Each f In SharepointFolder.Files
+
+    ' Skip temporary files
+    If Left(f.Name, 1) = "~" Then
+    ' Do Nothing
+    Debug.Print ("Skipped" & f.Name)
+    
+    Else
+
+        ' TestScript file is opened if not already so
+        If Not IsWorkBookOpen(f.Name) Then
+        
+            Debug.Print (f.Name)
+            Set TestScriptWB = Workbooks.Open(SharepointFolder & "\" & f.Name)
+            DoEvents
+            'TestScriptWB.Activate
+            'TestScriptWB.LockServerFile
+            TestScriptWasOpened = True
+            Debug.Print ("Test script was opened")
+        Else
+            Set TestScriptWB = Workbooks(f.Name)
+            Debug.Print ("Test script " & f.Name & " was already open")
+        End If
+            
+            ' Finds how many rows in script has values, i.e. how many rows to check for defects
+        LastRow = TestScriptWB.Sheets(2).Cells.Find(What:="*", _
+                            after:=Range("A1"), _
+                            LookAt:=xlPart, _
+                            LookIn:=xlFormulas, _
+                            SearchOrder:=xlByRows, _
+                            SearchDirection:=xlPrevious, _
+                            MatchCase:=False).Row
+                            
+        Debug.Print ("Rows to check: " & LastRow)
+        
+        ' Goes through each row on test script
+        For i = 2 To LastRow
+        
+            'If row has a defect (case insensitive) and doesn't have Defect ID yet, it is selected for copying
+            If (UCase(TestScriptWB.Sheets(2).Cells(i, 8)) = "DEFECT") Then
+            
+            'And Cells(i, 17) = ""
+                Debug.Print ("Defect row: " & i)
+                
+                'Find the 1st empty row from Defect log (ID in Column A is disregarded
+                erow = FirstBlankRow(DefectLogWB.Worksheets("Defect log").Range("B26:K426"))
+                
+                'Copy defect row to Defect log, for some reason error is given on 1st time without the activation =S
+                TestScriptWB.Activate
+                TestScriptWB.Sheets(2).Range(Cells(i, 1), Cells(i, 16)).Copy
+                DefectLogWB.Worksheets("Defect log").Cells(erow, 3).PasteSpecial xlPasteValues
+                
+                'Copy test script name to Defect log
+                DefectLogWB.Worksheets("Defect log").Cells(erow, 2) = TestScriptWB.Name
+                
+                DefectLogWB.Save
+                
+                'Copy-paste defect ID to test script
+                'DefectLogWB.Worksheets("Defect log").Cells(erow, 1).Copy TestScriptWB.Sheets(2).Cells(i, 17)
+                
+                'TestScriptWB.Save
+                Debug.Print ("Defect copied successfully: " & DefectLogWB.Worksheets("Defect log").Cells(erow, 1))
+                
+            End If
+       
+        Next i
+    
+    End If
+    
+    If TestScriptWasOpened Then Workbooks(TestScriptWB.Name).Close
+    
+
+Next f
+
+
+
+End Sub
+
+
+
+
+
+Function FirstBlankRow(ByVal rngToSearch As Range) As Long
+   Dim R As Range
+   Dim C As Range
+   Dim RowIsBlank As Boolean
+
+   For Each R In rngToSearch.Rows
+      RowIsBlank = True
+      For Each C In R.Cells
+         If IsEmpty(C.Value) = False Then RowIsBlank = False
+      Next C
+      If RowIsBlank Then
+      
+         FirstBlankRow = R.Row
+         Debug.Print ("Empty row: " & R.Row)
+         If RowIsBlank Then Exit For
+      End If
+   Next R
+   
+End Function
+
+Function IsWorkBookOpen(Name As String) As Boolean
+    Dim xWb As Workbook
+    On Error Resume Next
+    Set xWb = Application.Workbooks.Item(Name)
+    IsWorkBookOpen = (Not xWb Is Nothing)
+End Function
+
+Function Parse_Resource(URL As String)
+ 'Uncomment the below line to test locally without calling the function & remove argument above
+ 'Dim URL As String
+ Dim SplitURL() As String
+ Dim i As Integer
+ Dim WebDAVURI As String
+
+
+ 'Check for a double forward slash in the resource path. This will indicate a URL
+ If Not InStr(1, URL, "//", vbBinaryCompare) = 0 Then
+
+     'Split the URL into an array so it can be analyzed & reused
+     SplitURL = Split(URL, "/", , vbBinaryCompare)
+
+     'URL has been found so prep the WebDAVURI string
+     WebDAVURI = "\\"
+
+     'Check if the URL is secure
+     If SplitURL(0) = "https:" Then
+         'The code iterates through the array excluding unneeded components of the URL
+         For i = 0 To UBound(SplitURL)
+             If Not SplitURL(i) = "" Then
+                 Select Case i
+                     Case 0
+                         'Do nothing because we do not need the HTTPS element
+                     Case 1
+                         'Do nothing because this array slot is empty
+                     Case 2
+                     'This should be the root URL of the site. Add @ssl to the WebDAVURI
+                         WebDAVURI = WebDAVURI & SplitURL(i) & "@ssl"
+                     Case Else
+                         'Append URI components and build string
+                         WebDAVURI = WebDAVURI & "\" & SplitURL(i)
+                 End Select
+             End If
+         Next i
+
+     Else
+     'URL is not secure
+         For i = 0 To UBound(SplitURL)
+
+            'The code iterates through the array excluding unneeded components of the URL
+             If Not SplitURL(i) = "" Then
+                 Select Case i
+                     Case 0
+                         'Do nothing because we do not need the HTTPS element
+                     Case 1
+                         'Do nothing because this array slot is empty
+                         Case 2
+                     'This should be the root URL of the site. Does not require an additional slash
+                         WebDAVURI = WebDAVURI & SplitURL(i)
+                     Case Else
+                         'Append URI components and build string
+                         WebDAVURI = WebDAVURI & "\" & SplitURL(i)
+                 End Select
+             End If
+         Next i
+     End If
+  'Set the Parse_Resource value to WebDAVURI
+  Parse_Resource = WebDAVURI
+ Else
+ 'There was no double forward slash so return system path as is
+     Parse_Resource = URL
+ End If
+
+
+ End Function
+ 
+ Function DigFilename(URL As String)
+
+ 'Uncomment the below line to test locally without calling the function & remove argument above
+ Dim SplitURL() As String
+
+ 'Split the URL into an array
+ SplitURL = Split(URL, "/", , vbBinaryCompare)
+ ' Debug.Print (SplitURL(UBound(SplitURL)))
+ DigFilename = Replace(SplitURL(UBound(SplitURL)), "%20", " ")
+
+End Function
